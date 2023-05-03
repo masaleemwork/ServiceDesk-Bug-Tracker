@@ -1,36 +1,32 @@
 import json
+import boto3
 from flask import Flask, render_template, request
 
 app = Flask(__name__)
 
+sqs = boto3.client('sqs')
+HIGH_PRIORITY_QUEUE_URL = 'https://sqs.eu-west-2.amazonaws.com/423598777794/high-priority-queue'
+MEDIUM_PRIORITY_QUEUE_URL = 'https://sqs.eu-west-2.amazonaws.com/423598777794/medium-priority-queue'
+LOW_PRIORITY_QUEUE_URL = 'https://sqs.eu-west-2.amazonaws.com/423598777794/low-priority-queue'
+DLQ_URL = 'https://sqs.eu-west-2.amazonaws.com/423598777794/dead-letter-queue'
+
 # define a function to handle requests based on their priority
 def handle_priority(priority, additional_info):
     if priority == 'high':
-        # if the priority is high, send a teams message to notify someone
-        with open('high_priority.json', 'a') as file:
-            data = {"priority": priority, "additional_info": additional_info}
-            json.dump(data, file)
-            file.write('\n')
+        # if the priority is high, send a message to the high priority queue
+        sqs.send_message(QueueUrl=HIGH_PRIORITY_QUEUE_URL, MessageBody=json.dumps({"priority": priority, "additional_info": additional_info}))
 
     elif priority == 'medium':
-        # if the priority is medium, log the request to trello
-        with open('medium_priority.json', 'a') as file:
-            data = {"priority": priority, "additional_info": additional_info}
-            json.dump(data, file)
-            file.write('\n')
+        # if the priority is medium, send a message to the medium priority queue
+        sqs.send_message(QueueUrl=MEDIUM_PRIORITY_QUEUE_URL, MessageBody=json.dumps({"priority": priority, "additional_info": additional_info}))
 
     elif priority == 'low':
-        with open('low_priority.json', 'a') as file:
-            data = {"priority": priority, "additional_info": additional_info}
-            json.dump(data, file)
-            file.write('\n')
+        # if the priority is low, send a message to the low priority queue
+        sqs.send_message(QueueUrl=LOW_PRIORITY_QUEUE_URL, MessageBody=json.dumps({"priority": priority, "additional_info": additional_info}))
 
     else:
-        # if the priority level is not recognized, log the request to the DLQ json file
-        with open('dlq.json', 'a') as file:
-            data = {"priority": priority, "additional_info": additional_info}
-            json.dump(data, file)
-            file.write('\n')
+        # if the priority level is not recognised, send a message to the dead-letter queue
+        sqs.send_message(QueueUrl=DLQ_URL, MessageBody=json.dumps({"priority": priority, "additional_info": additional_info}))
 
 # create a route to serve the request form
 @app.route('/')
@@ -52,10 +48,10 @@ def handle_request():
     handle_priority(priority, additional_info)
 
     if priority in ('high', 'medium', 'low'):
-        # if the priority is recognized, return a success message to the client
+        # if the priority is recognised, return a success message to the client
         return 'Request processed successfully'
     else:
-        # if the priority level is not recognized, return an error message to the client
+        # if the priority level is not recognised, return an error message to the client
         return 'Error: priority level not recognized'
 
 if __name__ == '__main__':
